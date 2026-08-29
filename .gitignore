@@ -1,0 +1,233 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# Testing
+coverage/
+.nyc_output/
+*.log
+*.lcov
+
+# Next.js
+.next/
+out/
+build/
+dist/
+.vercel/
+
+# Production
+/build
+
+# Misc
+.DS_Store
+*.pem
+.AppleDouble
+.LSOverride
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Local env files (КРИТИЧНО!)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE / Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+.loadpath
+*.sublime-workspace
+*.sublime-project
+
+# OS Files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Database files (SQLite если используется)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+dev.db
+dev.db-journal
+
+# Prisma
+prisma/migrations/*.sql
+/prisma/.env
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Testing
+.cache/
+.jest/
+coverage/
+*.test.js.snap
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# dotenv environment variable files
+.env.backup
+.env.production
+
+# Temporary folders
+tmp/
+temp/
+.tmp/
+.temp/
+
+# Documentation drafts (необязательно, но полезно)
+*.draft.md
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# Agent/AI specific folders (могут содержать локальные настройки)
+.agents/
+.claude/
+.cursor/
+.devin/
+.kiro/
+
+# Local configuration
+.local/
+
+# Docker
+*.dockerfile.local
+
+# Sensitive data
+secrets/
+private/
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Large files that shouldn't be in repo
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+
+# Lock files (опционально - можно раскомментировать если нужно)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# ДОКУМЕНТАЦИЯ И ВРЕМЕННЫЕ ФАЙЛЫ (НЕ НУЖНЫ В REPO!)
+AGENTS.md
+CLAUDE.md
+IMPLEMENTATION_STATUS.md
+INSTALLATION_NOTE.md
+FINAL_STATUS.md
+QUALITY_REPORT.md
+PROJECT_READY.md
+GITIGNORE_CHECKLIST.md
+VERCEL_DEPLOYMENT_CHECKLIST.md
+БЕЗОПАСНОСТЬ_ПРОВЕРЕНА.md
+ГОТОВО_К_ВЫГРУЗКЕ.md
+
+# Вся документация кроме README
+DEPLOYMENT.md
+QUICK_START.md
+
+# README - не используется в коде
+README.md
+
+# Конфигурационные файлы не используемые в runtime
+.dockerignore
+.vercelignore
+.gitattributes
+docker-compose.yml
+eslint.config.mjs
+.eslintrc.json
+vitest.config.ts
+prisma.config.ts
+next.config.ts
+
+# Тесты
+tests/
+
+# Папки AI агентов
+.agents/
+.claude/
+.cursor/
+.devin/
+
+# Документация
+docs/
+
+# TypeScript build info
+tsconfig.tsbuildinfo

@@ -1,0 +1,654 @@
+// Empire Database Schema
+// Based on DATABASE.md architecture
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================
+// AUTHENTICATION & AUTHORIZATION
+// ============================================
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String?
+  avatar       String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  // Relations
+  roles        UserRole[]
+  createdNodes Node[]             @relation("NodeCreator")
+  documents    Document[]         @relation("DocumentCreator")
+  auditLogs    AuditLog[]
+  positions    NodePosition[]
+  imports      Import[]
+  aiRuns       AIRun[]
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+
+  // Relations
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  description String?
+
+  // Relations
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  userId     String
+  roleId     String
+  assignedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ============================================
+// CORE SYSTEM - NODE
+// ============================================
+
+model NodeType {
+  id    String  @id @default(cuid())
+  key   String  @unique
+  name  String
+  icon  String?
+  color String?
+
+  // Relations
+  nodes Node[]
+
+  @@map("node_types")
+}
+
+model Node {
+  id          String  @id @default(cuid())
+  parentId    String?
+  typeId      String
+  title       String
+  slug        String?
+  description String? @db.Text
+
+  // Status & Priority
+  status   String  @default("idea")
+  priority String? @default("medium")
+
+  // Dates
+  plannedStart DateTime?
+  actualStart  DateTime?
+  deadline     DateTime?
+  reviewAt     DateTime?
+  completedAt  DateTime?
+
+  // Progress cache
+  progressCache Float @default(0)
+
+  // Metadata
+  metadata String?
+
+  // Audit
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  // Relations
+  parent             Node?                @relation("NodeHierarchy", fields: [parentId], references: [id])
+  children           Node[]               @relation("NodeHierarchy")
+  type               NodeType             @relation(fields: [typeId], references: [id])
+  createdBy          User                 @relation("NodeCreator", fields: [createdById], references: [id])
+  documents          Document[]
+  tasks              Task[]
+  relationsFrom      NodeRelation[]       @relation("RelationFrom")
+  relationsTo        NodeRelation[]       @relation("RelationTo")
+  locations          NodeLocation[]
+  positions          NodePosition[]
+  financialEntries   FinancialEntry[]
+  metrics            Metric[]
+  decisions          Decision[]
+  experiments        Experiment[]
+  businessParameters BusinessParameter[]
+  dataSources        DataSource[]
+
+  @@index([parentId])
+  @@index([typeId])
+  @@index([status])
+  @@index([createdById])
+  @@map("nodes")
+}
+
+model NodeRelation {
+  id          String  @id @default(cuid())
+  fromNodeId  String
+  toNodeId    String
+  type        String
+  description String?
+  metadata    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  fromNode Node @relation("RelationFrom", fields: [fromNodeId], references: [id], onDelete: Cascade)
+  toNode   Node @relation("RelationTo", fields: [toNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([fromNodeId, toNodeId, type])
+  @@index([fromNodeId])
+  @@index([toNodeId])
+  @@index([type])
+  @@map("node_relations")
+}
+
+// ============================================
+// DOCUMENTS (TIPTAP)
+// ============================================
+
+model Document {
+  id               String    @id @default(cuid())
+  nodeId           String
+  parentDocumentId String?
+  title            String
+  contentJson      String?
+  plainText        String?   @db.Text
+  sortOrder        Int       @default(0)
+  isPrimary        Boolean   @default(false)
+  createdById      String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  // Relations
+  node     Node              @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  parent   Document?         @relation("DocumentHierarchy", fields: [parentDocumentId], references: [id])
+  children Document[]        @relation("DocumentHierarchy")
+  createdBy User             @relation("DocumentCreator", fields: [createdById], references: [id])
+  versions DocumentVersion[]
+
+  @@index([nodeId])
+  @@index([parentDocumentId])
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id          String   @id @default(cuid())
+  documentId  String
+  contentJson Json
+  plainText   String?  @db.Text
+  createdById String
+  createdAt   DateTime @default(now())
+  reason      String?
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([createdAt])
+  @@map("document_versions")
+}
+
+// ============================================
+// TASKS
+// ============================================
+
+model Task {
+  id           String    @id @default(cuid())
+  nodeId       String
+  parentTaskId String?
+  title        String
+  description  String?   @db.Text
+  status       String    @default("planned")
+  priority     String?   @default("medium")
+  deadline     DateTime?
+  completedAt  DateTime?
+  assigneeId   String?
+  metadata     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  // Relations
+  node     Node   @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  parent   Task?  @relation("TaskHierarchy", fields: [parentTaskId], references: [id])
+  children Task[] @relation("TaskHierarchy")
+
+  @@index([nodeId])
+  @@index([parentTaskId])
+  @@index([status])
+  @@map("tasks")
+}
+
+// ============================================
+// DECISIONS
+// ============================================
+
+model Decision {
+  id           String    @id @default(cuid())
+  nodeId       String
+  title        String
+  decision     String    @db.Text
+  reason       String?   @db.Text
+  consequences String?   @db.Text
+  status       String    @default("active")
+  decidedAt    DateTime  @default(now())
+  decidedById  String
+  reviewAt     DateTime?
+  metadata     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  node Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId])
+  @@map("decisions")
+}
+
+// ============================================
+// EXPERIMENTS
+// ============================================
+
+model Experiment {
+  id              String    @id @default(cuid())
+  nodeId          String
+  title           String
+  hypothesis      String    @db.Text
+  successCriteria String?   @db.Text
+  startDate       DateTime?
+  endDate         DateTime?
+  reviewDate      DateTime?
+  status          String    @default("planned")
+  result          String?
+  notes           String?   @db.Text
+  metadata        String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  node Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId])
+  @@index([status])
+  @@map("experiments")
+}
+
+// ============================================
+// GEOGRAPHY
+// ============================================
+
+model NodeLocation {
+  id        String  @id @default(cuid())
+  nodeId    String
+  country   String?
+  region    String?
+  city      String?
+  address   String?
+  latitude  Float?
+  longitude Float?
+  metadata  String?
+
+  node Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId])
+  @@index([country])
+  @@index([city])
+  @@map("node_locations")
+}
+
+// ============================================
+// UNIVERSE POSITIONS
+// ============================================
+
+model NodePosition {
+  id          String   @id @default(cuid())
+  nodeId      String
+  userId      String
+  scopeNodeId String?
+  x           Float
+  y           Float
+  metadata    String?
+  updatedAt   DateTime @updatedAt
+
+  node Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([nodeId, userId, scopeNodeId])
+  @@index([userId])
+  @@map("node_positions")
+}
+
+// ============================================
+// FINANCES
+// ============================================
+
+model FinancialEntry {
+  id               String    @id @default(cuid())
+  nodeId           String
+  type             String
+  scenario         String
+  amount           Decimal   @db.Decimal(15, 2)
+  currency         String    @default("KZT")
+  periodStart      DateTime?
+  periodEnd        DateTime?
+  isRecurring      Boolean   @default(false)
+  source           String?
+  counterpartyType String?
+  counterpartyId   String?
+  description      String?
+  metadata         String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  node Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId])
+  @@index([type])
+  @@index([scenario])
+  @@index([periodStart])
+  @@map("financial_entries")
+}
+
+// ============================================
+// METRICS (KPI)
+// ============================================
+
+model Metric {
+  id               String   @id @default(cuid())
+  nodeId           String
+  key              String
+  name             String
+  unit             String?
+  direction        String?  @default("higher_is_better")
+  target           Decimal? @db.Decimal(15, 2)
+  warningThreshold Decimal? @db.Decimal(15, 2)
+  aggregationType  String?  @default("sum")
+  sourceType       String
+  description      String?
+  metadata         String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  deletedAt        DateTime?
+
+  node   Node          @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  values MetricValue[]
+
+  @@unique([nodeId, key])
+  @@index([nodeId])
+  @@index([key])
+  @@map("metrics")
+}
+
+model MetricValue {
+  id              String   @id @default(cuid())
+  metricId        String
+  value           Decimal  @db.Decimal(15, 2)
+  timestamp       DateTime @default(now())
+  sourceId        String?
+  externalEventId String?
+  metadata        String?
+
+  metric Metric @relation(fields: [metricId], references: [id], onDelete: Cascade)
+
+  @@unique([metricId, externalEventId])
+  @@index([metricId])
+  @@index([timestamp])
+  @@map("metric_values")
+}
+
+// ============================================
+// INTEGRATIONS
+// ============================================
+
+model DataSource {
+  id           String    @id @default(cuid())
+  nodeId       String
+  name         String
+  key          String    @unique
+  type         String
+  url          String?
+  method       String?   @default("GET")
+  headers      String?
+  authConfig   String?
+  pollInterval Int?
+  mapping      String?
+  isEnabled    Boolean   @default(true)
+  lastSyncAt   DateTime?
+  nextSyncAt   DateTime?
+  metadata     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  node     Node      @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  syncRuns SyncRun[]
+
+  @@index([nodeId])
+  @@index([type])
+  @@map("data_sources")
+}
+
+model SyncRun {
+  id           String    @id @default(cuid())
+  dataSourceId String
+  status       String
+  recordsCount Int       @default(0)
+  errorMessage String?   @db.Text
+  duration     Int?
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+  metadata     String?
+
+  dataSource DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+
+  @@index([dataSourceId])
+  @@index([startedAt])
+  @@map("sync_runs")
+}
+
+// ============================================
+// ACTION CONNECTORS
+// ============================================
+
+model BusinessParameter {
+  id               String   @id @default(cuid())
+  nodeId           String
+  key              String
+  name             String
+  value            String
+  valueType        String   @default("string")
+  unit             String?
+  source           String   @default("manual")
+  externalActionId String?
+  updatedAt        DateTime @updatedAt
+  metadata         String?
+
+  node Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@unique([nodeId, key])
+  @@index([nodeId])
+  @@map("business_parameters")
+}
+
+// ============================================
+// IMPORT CENTER
+// ============================================
+
+model Import {
+  id            String    @id @default(cuid())
+  filename      String
+  fileHash      String
+  fileType      String
+  extractedText String?   @db.Text
+  status        String    @default("pending")
+  aiSuggestions String?
+  userId        String
+  createdAt     DateTime  @default(now())
+  processedAt   DateTime?
+  metadata      String?
+
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items ImportItem[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("imports")
+}
+
+model ImportItem {
+  id            String   @id @default(cuid())
+  importId      String
+  proposedType  String
+  proposedData Json
+  status        String   @default("staged")
+  createdNodeId String?
+  createdAt     DateTime @default(now())
+
+  import Import @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@index([importId])
+  @@map("import_items")
+}
+
+// ============================================
+// AI
+// ============================================
+
+model AIProvider {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  baseUrl         String
+  apiKeyEncrypted String
+  isDefault       Boolean  @default(false)
+  isEnabled       Boolean  @default(true)
+  metadata        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  runs AIRun[]
+
+  @@map("ai_providers")
+}
+
+model AIRun {
+  id         String   @id @default(cuid())
+  providerId String
+  userId     String
+  nodeId     String?
+  type       String
+  prompt     String   @db.Text
+  response   String?  @db.Text
+  tokensUsed Int?
+  duration   Int?
+  status     String
+  error      String?
+  createdAt  DateTime @default(now())
+
+  provider  AIProvider   @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  proposals AIProposal[]
+
+  @@index([userId])
+  @@index([nodeId])
+  @@map("ai_runs")
+}
+
+model AIProposal {
+  id         String    @id @default(cuid())
+  aiRunId    String
+  type       String
+  data Json
+  status     String    @default("pending")
+  acceptedAt DateTime?
+
+  aiRun AIRun @relation(fields: [aiRunId], references: [id], onDelete: Cascade)
+
+  @@index([aiRunId])
+  @@index([status])
+  @@map("ai_proposals")
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  message   String    @db.Text
+  nodeId    String?
+  url       String?
+  isRead    Boolean   @default(false)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  metadata  String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ============================================
+// AUDIT LOG
+// ============================================
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  entity    String
+  entityId  String
+  before    String?
+  after     String?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
